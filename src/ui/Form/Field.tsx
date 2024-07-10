@@ -1,4 +1,3 @@
-import { Row } from "../Row.tsx";
 import OutlinedInput from "@mui/material/OutlinedInput";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -11,8 +10,10 @@ import Stack from "@mui/material/Stack";
 import { RadioLine } from "./RadioLine";
 import { Controller, type UseFormReturn } from "react-hook-form";
 import TextField, { TextFieldProps } from "@mui/material/TextField";
-
+import WarningIcon from "@mui/icons-material/Warning";
+import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import { FormControl, FormHelperText, InputLabel, MenuItem, Select, SelectProps } from "@mui/material";
+import { Row } from "../Row";
 
 type Props = Pick<TextFieldProps, "onChange" | "onBlur" | "name" | "label" | "required" | "sx"> &
   Pick<SelectProps, "onChange" | "defaultValue" | "disabled"> & {
@@ -39,14 +40,14 @@ export const Field = forwardRef<HTMLElement, Props>((props, ref) => {
     (props.type && props.type !== "text" && props.type !== "select") || props.labelOutside;
 
   return (
-    <Row gap={3}>
+    <Stack gap={1}>
       {labelOutside && (
         <Box sx={{ flex: "none", minWidth: 90 }}>
           <Typography
             component="label"
             id={`label-${props.name}`}
             htmlFor={props.name}
-            variant="bodyMedium"
+            variant="titleMedium"
             color="textTertiary"
             sx={{ whiteSpace: "noWrap" }}
           >
@@ -71,7 +72,7 @@ export const Field = forwardRef<HTMLElement, Props>((props, ref) => {
         )}
         {!isControlled && uncontrolledField(props, ref)}
       </Box>
-    </Row>
+    </Stack>
   );
 });
 
@@ -84,11 +85,10 @@ export function uncontrolledField(props: Props, ref: any) {
     const labelId = `label-${props.name}`;
 
     return (
-      <FormControl fullWidth>
-        <InputLabel size="small" id={labelId}>
-          {props.label}
-        </InputLabel>
+      <FormControl fullWidth variant="filled">
+        <InputLabel id={labelId}>{props.label}</InputLabel>
         <Select
+          IconComponent={props => <ExpandMoreOutlinedIcon {...props} sx={{ color: "text.primary" }} />}
           disabled={props.disabled}
           fullWidth
           {...props}
@@ -97,8 +97,9 @@ export function uncontrolledField(props: Props, ref: any) {
           id={`select-${props.name}`}
           error={!!props.error}
           inputRef={ref}
-          size="small"
           displayEmpty
+          disableUnderline
+          variant="filled"
         >
           {props.selectoptions.map(option => (
             <MenuItem key={option} value={option}>
@@ -114,10 +115,18 @@ export function uncontrolledField(props: Props, ref: any) {
     <TextField
       fullWidth
       {...props}
+      InputProps={{ disableUnderline: true }}
       inputRef={ref}
       error={!!props.error}
-      helperText={props.error}
-      size="small"
+      helperText={
+        props.error && (
+          <Row gap={1}>
+            <WarningIcon fontSize="small" />
+            <Typography variant="bodyLarge">{props.error}</Typography>
+          </Row>
+        )
+      }
+      variant="filled"
     />
   );
 }
@@ -135,18 +144,32 @@ export function controlledField({ type, name, options, error }: Props, field: an
           row
           aria-labelledby={`label-${name}`}
           name={name}
-          sx={{ flexWrap: "nowrap" }}
+          sx={{
+            flexWrap: "nowrap",
+            pl: 1,
+            ".MuiFormControlLabel-root": {
+              gap: "16px",
+            },
+            ".MuiFormControlLabel-label": {
+              typography: "bodyLarge",
+            },
+          }}
         >
           {options?.map(o => (
             <FormControlLabel
               key={o.value}
               value={o.value}
-              control={<Radio sx={{ p: 0 }} size="small" />}
+              control={<Radio sx={{ p: 0, color: "primary.main" }} />}
               label={o.label}
             />
           ))}
         </RadioGroup>
-        {error && <FormHelperText>{error}</FormHelperText>}
+        {error && (
+          <FormHelperText>
+            <WarningIcon />
+            {error}
+          </FormHelperText>
+        )}
       </FormControl>
     );
   }

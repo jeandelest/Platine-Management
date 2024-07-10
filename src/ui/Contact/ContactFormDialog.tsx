@@ -1,13 +1,21 @@
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider } from "@mui/material";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Typography,
+} from "@mui/material";
 import { z } from "zod";
 import { useForm } from "../../hooks/useForm.ts";
 import { APISchemas } from "../../types/api.ts";
 import { Field } from "../Form/Field.tsx";
 import Stack from "@mui/material/Stack";
-import { Row } from "../Row.tsx";
-import StarIcon from "@mui/icons-material/Star";
 import { useFetchMutation } from "../../hooks/useFetchQuery.ts";
 import { AddressFormFields } from "../Form/AddressFormFields.tsx";
+import { useState } from "react";
 
 type Props = {
   open: boolean;
@@ -57,60 +65,35 @@ export const addressSchema = z
       .nullable()
       .transform(val => (val === null ? "" : val)),
     countryName: z.string().optional().or(z.literal("")),
+    codeChoice: z.string(),
   })
-  .superRefine(({ cedexCode, zipCode, cityName, cedexName }, refinementContext) => {
-    if ((cedexCode === undefined || cedexCode === "") && (zipCode === undefined || zipCode === "")) {
+  .superRefine(({ cedexCode, zipCode, cityName, cedexName, codeChoice }, refinementContext) => {
+    if (codeChoice === "zipCode" && (zipCode === undefined || zipCode === "")) {
       refinementContext.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Code cedex ou code postal requis",
+        message: "Veuillez saisir un code postal",
         path: ["zipCode"],
       });
-      return refinementContext.addIssue({
+    }
+    if (codeChoice === "zipCode" && (cityName === undefined || cityName === "")) {
+      refinementContext.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Code cedex ou code postal requis",
+        message: "Veuillez saisir une commune.",
+        path: ["cityName"],
+      });
+    }
+    if (codeChoice === "cedexCode" && (cedexCode === undefined || cedexCode === "")) {
+      refinementContext.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Veuillez saisir un code cedex.",
         path: ["cedexCode"],
       });
     }
-
-    if (cedexCode && cedexCode !== "" && zipCode && zipCode !== "") {
+    if (codeChoice === "cedexCode" && (cedexName === undefined || cedexName === "")) {
       refinementContext.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Impossible de remplir code postal et code cedex",
-        path: ["zipCode"],
-      });
-      return refinementContext.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Impossible de remplir code postal et code cedex",
-        path: ["cedexCode"],
-      });
-    }
-
-    if (cedexName && cedexName !== "" && cityName && cityName !== "") {
-      refinementContext.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Impossible de remplir commune et bureau distributeur",
-        path: ["cityName"],
-      });
-      return refinementContext.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Impossible de remplir commune et bureau distributeur",
+        message: "Veuillez saisir un bureau distributeur.",
         path: ["cedexName"],
-      });
-    }
-
-    if (cedexCode !== undefined && cedexCode !== "" && (cedexName === undefined || cedexName === "")) {
-      return refinementContext.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Champs requis",
-        path: ["cedexName"],
-      });
-    }
-
-    if (zipCode !== undefined && zipCode !== "" && (cityName === undefined || cityName === "")) {
-      return refinementContext.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Champs requis",
-        path: ["cityName"],
       });
     }
   });
@@ -145,25 +128,49 @@ export const styles = {
   Grid: {
     display: "grid",
     gridTemplateColumns: "1fr 1px 1fr ",
-    gap: "40px",
+    gap: "24px",
+    paddingTop: "8px",
   },
 };
 
 export const ContactFormDialog = ({ open, onClose, contact, onSave }: Props) => {
-  const defaultValues = contact.address?.countryName
-    ? contact
-    : { ...contact, address: { ...contact.address, countryName: "France" } };
-  const { register, control, errors, handleSubmit, reset } = useForm(schema, {
+  const code = contact.address?.zipCode && contact.address.zipCode !== "" ? "zipCode" : "cedexCode";
+
+  const defaultValues = { ...contact, address: { ...contact.address, codeChoice: code } };
+  const { register, control, errors, handleSubmit, reset, setValue } = useForm(schema, {
     defaultValues: defaultValues,
   });
+
+  const [codeType, setCodeType] = useState(code);
 
   const { mutateAsync, isPending } = useFetchMutation("/api/contacts/{id}", "put");
 
   const onSubmit = handleSubmit(async data => {
-    await mutateAsync({
-      body: { ...data, identifier: contact.identifier },
-      urlParams: { id: contact.identifier },
-    });
+    if (codeType === "zipCode") {
+      await mutateAsync({
+        body: {
+          ...data,
+          identifier: contact.identifier,
+          address: { ...data.address, cedexCode: "", cedexName: "" },
+        },
+        urlParams: { id: contact.identifier },
+      });
+      setValue("address.cedexCode", "");
+      setValue("address.cedexName", "");
+    }
+    if (codeType === "cedexCode") {
+      await mutateAsync({
+        body: {
+          ...data,
+          identifier: contact.identifier,
+          address: { ...data.address, zipCode: "", cityName: "" },
+        },
+        urlParams: { id: contact.identifier },
+      });
+      setValue("address.zipCode", "");
+      setValue("address.cityName", "");
+    }
+
     onSave();
   });
 
@@ -171,15 +178,17 @@ export const ContactFormDialog = ({ open, onClose, contact, onSave }: Props) => 
     reset(defaultValues);
     onClose();
   };
-  console.log({ errors });
 
   return (
-    <Dialog open={open} onClose={handleClose} sx={{ ".MuiPaper-root": { maxWidth: "1160px", px: 3 } }}>
+    <Dialog open={open} onClose={handleClose} sx={{ ".MuiPaper-root": { maxWidth: "1160px", p: 2 } }}>
       <form action="#" onSubmit={onSubmit}>
-        <DialogTitle>Modification des coordonnées</DialogTitle>
+        <DialogTitle sx={{ typography: "headlineMedium" }}>{`Modifier les coordonnées ${
+          (contact.firstName || contact.lastName) && `de ${contact.firstName} ${contact.lastName}`
+        }`}</DialogTitle>
         <DialogContent>
           <Box sx={styles.Grid}>
-            <Stack gap={3} pt={2.5}>
+            <Stack gap={2}>
+              <Typography variant="headlineSmall">Informations du contact</Typography>
               <Field
                 control={control}
                 label="Civilité"
@@ -192,24 +201,12 @@ export const ContactFormDialog = ({ open, onClose, contact, onSave }: Props) => 
               <Field label="Prénom" error={errors.firstName?.message} {...register("firstName")} />
               <Field label="Fonction" error={errors.function?.message} {...register("function")} />
               <Field label="Adresse courriel" error={errors.email?.message} {...register("email")} />
-              <Row gap={3}>
-                <Field
-                  sx={{ width: "180px" }}
-                  label="Téléphone 1"
-                  error={errors.phone?.message}
-                  {...register("phone")}
-                />
-                <StarIcon fontSize="small" color="yellow" />
-              </Row>
-              <Row gap={3}>
-                <Field
-                  sx={{ width: "180px" }}
-                  label="Téléphone 2"
-                  error={errors.secondPhone?.message}
-                  {...register("secondPhone")}
-                />
-                <StarIcon fontSize="small" color="text.hint" />
-              </Row>
+              <Field label="Téléphone 1" error={errors.phone?.message} {...register("phone")} />
+              <Field
+                label="Téléphone 2"
+                error={errors.secondPhone?.message}
+                {...register("secondPhone")}
+              />
             </Stack>
             <Divider orientation="vertical" variant="middle" />
             <AddressFormFields
@@ -217,17 +214,27 @@ export const ContactFormDialog = ({ open, onClose, contact, onSave }: Props) => 
               register={register}
               repetitionIndexValue={contact.address?.repetitionIndex}
               streetTypeValue={contact.address?.streetType}
-              countryValue={contact.address?.countryName?.toLocaleUpperCase() ?? "FRANCE"}
+              countryValue={contact.address?.countryName?.toLocaleUpperCase()}
+              codeType={code}
+              onChangeCodeChoice={e => (
+                setCodeType(e.target.value), setValue("address.codeChoice", e.target.value)
+              )}
               type="contact"
             />
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button type="reset" onClick={handleClose} disabled={isPending}>
+        <DialogActions sx={{ gap: 2 }}>
+          <Button
+            type="reset"
+            variant="outlined"
+            onClick={handleClose}
+            disabled={isPending}
+            sx={{ width: "150px" }}
+          >
             Annuler
           </Button>
-          <Button type="submit" variant="contained" disabled={isPending}>
-            Enregistrer
+          <Button type="submit" variant="contained" disabled={isPending} sx={{ width: "150px" }}>
+            Valider
           </Button>
         </DialogActions>
       </form>
